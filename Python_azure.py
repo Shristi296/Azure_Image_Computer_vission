@@ -1,16 +1,27 @@
 from azure.cognitiveservices.vision.computervision import ComputerVisionClient
 from azure.cognitiveservices.vision.computervision.models import VisualFeatureTypes
 from msrest.authentication import CognitiveServicesCredentials
+from azure.storage.blob import BlobServiceClient
+from azure.ai.textanalytics import TextAnalyticsClient
+from azure.core.credentials import AzureKeyCredential
 from sklearn.metrics import confusion_matrix
 import os
 from PIL import Image, ImageDraw, ImageFont
 import matplotlib.pyplot as plt
 import numpy as np
 
-subscription_key = "426804134b8c424eb992d26b62fb8b25"
-endpoint = "https://shristi29.cognitiveservices.azure.com/"
+subscription_key = "21c102c6e2e44810b868e6679d9794a5"
+endpoint = "https://imagerecognitionpython.cognitiveservices.azure.com/"
+
+text_analytics_key = "22a5674ad5244beb88e2ffed20e8d19f"
+text_analytics_endpoint = "https://textreconitionser.cognitiveservices.azure.com/"
+text_analytics_client = TextAnalyticsClient(endpoint=text_analytics_endpoint, credential=AzureKeyCredential(text_analytics_key),text_analytics_account="opinionmining")
 
 computervision_client = ComputerVisionClient(endpoint, CognitiveServicesCredentials(subscription_key))
+
+connection_string = "DefaultEndpointsProtocol=https;AccountName=storageaccountimages77;AccountKey=8sSxsmE8+3OqWxksOiZZQuUwselC/y1FiyedrVAOAZ8OWD2mH0ksDgOZJPCC7FoWChJzvPvj0iPN+AStf7uP3w==;EndpointSuffix=core.windows.net"
+container_name = "imagescv"  # Replace with your container name
+blob_service_client = BlobServiceClient.from_connection_string(connection_string)
 
 folder = 'D:/azure_cv/cv_demo_images/'
 out_folder = 'D:/azure_cv/cv_demo_images_output/'
@@ -53,6 +64,28 @@ for file in files:
             confidence_values.append(obj.confidence)
             object_names.append(obj.object_property)
             predicted_labels.append(obj.object_property)
+
+            # Perform sentiment analysis on the object name
+            response = text_analytics_client.analyze_sentiment(documents=[{"id": "1", "language": "en", "text": obj.object_property}],show_opinion_mining=True)
+
+            sentiment = response[0].sentences[0].sentiment
+            positive_score = response[0].sentences[0].confidence_scores.positive
+            negative_score = response[0].sentences[0].confidence_scores.negative
+            neutral_score = response[0].sentences[0].confidence_scores.neutral
+
+            blob_client = blob_service_client.get_blob_client(container=container_name, blob=file)
+            with open(os.path.join(out_folder, file), "rb") as data:
+                blob_client.upload_blob(data, overwrite=True)
+
+            # Print detailed sentiment scores
+            print(f"Sentiment for {obj.object_property}: {sentiment}")
+            # print(f"Translated name: {translated_name} (French)")
+            print(f"Blob URL: {blob_client.url}")
+            print(f"Positive score: {positive_score}")
+            print(f"Negative score: {negative_score}")
+            print(f"Neutral score: {neutral_score}")
+
+
 
         # image.show()
         image.save(os.path.join(out_folder, file))
@@ -102,8 +135,6 @@ plt.title('Object Detection Confidence Rate')
 plt.xticks(rotation=45, ha='right')
 plt.show()
 
-
-
 plt.bar(metrics, values1, color=['blue', 'green', 'orange', 'red'])
 plt.xlabel('Metrics')
 plt.ylabel('Value')
@@ -111,11 +142,6 @@ plt.title('Performance Metrics and Confidence Rate')
 plt.ylim([0, 1])
 plt.tight_layout()
 plt.show()
-
-
-
-
-
 
 
 
